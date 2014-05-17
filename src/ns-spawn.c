@@ -4,10 +4,8 @@
 #include <getopt.h>
 #include <limits.h>
 #include <sched.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/mount.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -103,19 +101,25 @@ int main(int argc, char *const argv[]) {
 
   unshare_user();
 
-  int status;
-
   pid_t pid = spawn_process(argv+optind);
 
   close(STDIN_FILENO);
   close(STDOUT_FILENO);
 
-  PERROR(==-1, waitpid, pid, &status, 0);
 
-  if(WIFSIGNALED(status)) {
-    return WTERMSIG(status)+128;
-  } else {
-    return WEXITSTATUS(status);
+  for(;;) {
+    int status;
+    PERROR(==-1, waitpid, pid, &status, 0);
+
+    if (WIFSTOPPED(status)) {
+      continue;
+    }
+
+    if(WIFSIGNALED(status)) {
+      return WTERMSIG(status)+128;
+    } else {
+      return WEXITSTATUS(status);
+    }
   }
 
   return 0;
@@ -186,9 +190,6 @@ void post_unshare() {
   VERBOSE("mounting new procfs\n");
   PERROR(==-1, mount, "proc", "/proc", "proc", 0, NULL);
 
-  VERBOSE("mounting new mqueue\n");
-  PERROR(==-1, mount, "mqueue", "/dev/mqueue", "mqueue", 0, NULL);
-
   if (hostname) {
     VERBOSE("setting new hostname\n");
     PERROR(==-1, sethostname, hostname, strlen(hostname));
@@ -200,14 +201,21 @@ void post_unshare() {
     pid_t pid = -1;
 
     PERROR(==-1, pid = fork);
-    
-    if(pid) {
-      int status;
-      PERROR(==-1, waitpid, pid, &status, 0);
 
-      if (!WIFEXITED(status) || WEXITSTATUS(status) !=0) {
-        fprintf(stderr, "post unshare hook exited abnormally\n");
-        exit(EXIT_FAILURE);
+    if(pid) {
+      for(;;) {
+        int status;
+        PERROR(==-1, waitpid, pid, &status, 0);
+
+        if (WIFSTOPPED(status)) {
+          continue;
+        }
+
+        if (!WIFEXITED(status) || WEXITSTATUS(status) !=0) {
+          fprintf(stderr, "post unshare hook exited abnormally\n");
+          exit(EXIT_FAILURE);
+        }
+        break;
       }
     } else {
       char *const argv[] = {post_unshare_hook, NULL};
@@ -240,7 +248,7 @@ int init(void *arg) {
     child_pid = waitpid(-1, &status, 0);
 
     if (child_pid == pid) {
-      if (WIFEXITED(status)) {
+      if (!WIFSTOPPED(status)) {
         if(WIFSIGNALED(status)) {
           return WTERMSIG(status)+128;
         } else {

@@ -1,7 +1,7 @@
-all: bin/ns-spawn
+all: bin/ns-spawn bin/nshd bin/nsh
 
 bin/%: src/%.c | bin
-	gcc -o "$@" "$<"
+	gcc -Wall -Werror -o "$@" "$<" -lutil
 
 bin:
 	mkdir bin
