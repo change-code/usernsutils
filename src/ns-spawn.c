@@ -107,10 +107,12 @@ int main(int argc, char *const argv[]) {
 
   PERROR(==-1, waitpid, pid, &status, 0);
 
-  if(WIFSIGNALED(status))
+  if(WIFSIGNALED(status)) {
     return WTERMSIG(status)+128;
-  else
+  } else {
     return WEXITSTATUS(status);
+  }
+
   return 0;
 
 err:
@@ -189,20 +191,49 @@ void post_unshare() {
 }
 
 
-int do_exec(void *arg) {
+int do_exec(char **argv) {
   post_unshare();
-
-  char **argv = arg;
   VERBOSE("start execing '%s'\n", argv[0]);
   PERROR(==-1, execvp, argv[0], argv);
-
   return EXIT_FAILURE;
+}
+
+
+int init(void *arg) {
+  pid_t pid = -1;
+  PERROR(==-1, pid = fork);
+
+  if (pid == 0) {
+    return do_exec((char **)arg);
+  }
+
+  for(;;) {
+    pid_t child_pid = -1;
+    int status;
+
+    child_pid = waitpid(-1, &status, 0);
+
+    if (child_pid == pid) {
+      if (WIFEXITED(status)) {
+        if(WIFSIGNALED(status)) {
+          return WTERMSIG(status)+128;
+        } else {
+          return WEXITSTATUS(status);
+        }
+      }
+    }
+
+    if (child_pid == -1) {
+      fprintf(stderr, "waitpid failed: %s\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+  }
 }
 
 
 int spawn_process(char *const argv[]) {
   int clone_flags = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWPID;
   pid_t pid = -1;
-  PERROR(== -1, pid = do_clone, do_exec, clone_flags, (void*)argv);
+  PERROR(== -1, pid = do_clone, init, clone_flags, (void*)argv);
   return pid;
 }
