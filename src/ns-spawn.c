@@ -32,16 +32,16 @@
 
 
 static int verbose = 0;
-static int flags = 0;
 static char *hostname = NULL;
+static char *post_unshare_hook = NULL;
+
 
 #define OPT_HOSTNAME 1
 
 
-
 static struct option options[] = {
   {"hostname",     required_argument, NULL, OPT_HOSTNAME},
-
+  {"post-unshare", required_argument, NULL, 's'},
   {"verbose",      no_argument,       NULL, 'v'},
   {"help",         no_argument,       NULL, 'h'},
   {NULL, no_argument, NULL, 0}
@@ -53,6 +53,7 @@ void show_usage(char const *name) {
   printf("Usage: %s [options] [--] [command]\n", name);
   printf("\n"
 	 "      --hostname=NAME        set hostname to NAME\n"
+         "  -s, --post-unshare=PATH    post unshare hook script\n"
 	 "\n"
 	 "  -v, --verbose              verbose\n"
 	 "  -h, --help                 print help message and exit\n"
@@ -70,7 +71,7 @@ int spawn_process(char *const argv[]);
 int main(int argc, char *const argv[]) {
   int opt, index;
 
-  while((opt = getopt_long(argc, argv, "+hv", options, &index)) != -1) {
+  while((opt = getopt_long(argc, argv, "+s:hv", options, &index)) != -1) {
     switch(opt) {
     case '?':
       goto err;
@@ -82,12 +83,16 @@ int main(int argc, char *const argv[]) {
       hostname = optarg;
       break;
 
+    case 's':
+      post_unshare_hook = optarg;
+      break;
+
     case 'v':
       verbose = 1;
       break;
 
     default:
-      flags |= opt;
+      break;
     }
   }
 
@@ -188,6 +193,27 @@ void post_unshare() {
     VERBOSE("setting new hostname\n");
     PERROR(==-1, sethostname, hostname, strlen(hostname));
   }
+
+  if(post_unshare_hook) {
+    VERBOSE("calling post unshare hook script '%s'\n", post_unshare_hook);
+
+    pid_t pid = -1;
+
+    PERROR(==-1, pid = fork);
+    
+    if(pid) {
+      int status;
+      PERROR(==-1, waitpid, pid, &status, 0);
+
+      if (!WIFEXITED(status) || WEXITSTATUS(status) !=0) {
+        fprintf(stderr, "post unshare hook exited abnormally\n");
+        exit(EXIT_FAILURE);
+      }
+    } else {
+      char *const argv[] = {post_unshare_hook, NULL};
+      PERROR(==-1, execvp, post_unshare_hook, argv);
+    }
+  }
 }
 
 
@@ -232,8 +258,8 @@ int init(void *arg) {
 
 
 int spawn_process(char *const argv[]) {
-  int clone_flags = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWPID;
+  int flags = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWPID;
   pid_t pid = -1;
-  PERROR(== -1, pid = do_clone, init, clone_flags, (void*)argv);
+  PERROR(== -1, pid = do_clone, init, flags, (void*)argv);
   return pid;
 }
