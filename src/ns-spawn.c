@@ -30,15 +30,24 @@
 
 
 static int verbose = 0;
+static int userns = 0;
+static char *netns = NULL;
 static char *hostname = NULL;
 static char *post_unshare_hook = NULL;
 
+static int netns_fd = -1;
 
-#define OPT_HOSTNAME 1
+#define OPT_USERNS 0
+#define OPT_NETNS 1
+#define OPT_HOSTNAME 2
 
 
 static struct option options[] = {
+  {"userns",       no_argument,       NULL, OPT_USERNS},
+  {"netns",        required_argument, NULL, OPT_NETNS},
   {"hostname",     required_argument, NULL, OPT_HOSTNAME},
+
+
   {"post-unshare", required_argument, NULL, 's'},
   {"verbose",      no_argument,       NULL, 'v'},
   {"help",         no_argument,       NULL, 'h'},
@@ -50,6 +59,9 @@ static struct option options[] = {
 void show_usage(char const *name) {
   printf("Usage: %s [options] [--] [command]\n", name);
   printf("\n"
+         "      --userns               new user namespace\n"
+         "      --netns=NETNS          use netns at NETNS\n"
+         "\n"
 	 "      --hostname=NAME        set hostname to NAME\n"
          "  -s, --post-unshare=PATH    post unshare hook script\n"
 	 "\n"
@@ -76,6 +88,15 @@ int main(int argc, char *const argv[]) {
 
     case 'h':
       show_usage(argv[0]);
+      break;
+
+    case OPT_USERNS:
+      userns = 1;
+      break;
+
+    case OPT_NETNS:
+      netns = optarg;
+      break;
 
     case OPT_HOSTNAME:
       hostname = optarg;
@@ -99,7 +120,19 @@ int main(int argc, char *const argv[]) {
     goto err;
   }
 
-  unshare_user();
+  if (netns) {
+    char netns_fd_path[PATH_MAX] = {0};
+    snprintf(netns_fd_path, PATH_MAX, "/var/run/netns/%s", netns);
+    netns_fd = open(netns_fd_path, O_RDONLY);
+    if (netns_fd == -1) {
+      fprintf(stderr, "%s: cannot open netns at '%s'\n", argv[0], netns);
+      goto err;
+    }
+  }
+
+  if (userns) {
+    unshare_user();
+  }
 
   pid_t pid = spawn_process(argv+optind);
 
@@ -234,6 +267,11 @@ int do_exec(char **argv) {
 
 
 int init(void *arg) {
+  if (netns) {
+    PERROR(==-1, setns, netns_fd, CLONE_NEWNET);
+    close(netns_fd);
+  }
+
   pid_t pid = -1;
   PERROR(==-1, pid = fork);
 
@@ -266,8 +304,18 @@ int init(void *arg) {
 
 
 int spawn_process(char *const argv[]) {
-  int flags = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWPID;
+  int flags = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID;
+
+  if (!netns) {
+    flags |= CLONE_NEWNET;
+  }
+
   pid_t pid = -1;
   PERROR(== -1, pid = do_clone, init, flags, (void*)argv);
+
+  if (netns) {
+    close(netns_fd);
+  }
+
   return pid;
 }
