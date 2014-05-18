@@ -1,0 +1,21 @@
+Quick Start
+
+[noname@localhost ~]$ git clone git://github.com/bhuztez/usernsutils.git
+[noname@localhost usernsutils]$ cd usernsutils
+[noname@localhost usernsutils]$ make
+[noname@localhost usernsutils]$ ./bin/ns-spawn --user --hostname=host0 -s ./misc/mktmpfs.sh -- bash
+[root@host0 usernsutils]# ip netns add ns1
+[root@host0 usernsutils]# ip link add veth0 type veth peer name veth1
+[root@host0 usernsutils]# ip link set veth1 netns ns1
+[root@host0 usernsutils]# ip address add 10.0.0.1 dev veth0
+[root@host0 usernsutils]# ip link set veth0 up
+[root@host0 usernsutils]# ip route add default dev veth0
+[root@host0 usernsutils]# ./bin/ns-spawn --netns ns1 --hostname=host1 -s ./misc/mktmpfs.sh -- bash
+[root@host1 usernsutils]# ip address add 10.0.0.2 dev veth1
+[root@host1 usernsutils]# ip link set veth1 up
+[root@host1 usernsutils]# ip route add default dev veth1
+[root@host1 usernsutils]# ping 10.0.0.1
+PING 10.0.0.1 (10.0.0.1) 56(84) bytes of data.
+64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=0.097 ms
+64 bytes from 10.0.0.1: icmp_seq=2 ttl=64 time=0.085 ms
+64 bytes from 10.0.0.1: icmp_seq=3 ttl=64 time=0.083 ms
