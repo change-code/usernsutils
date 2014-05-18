@@ -28,11 +28,12 @@
 
 static int verbose = 0;
 static char *socket_path = NULL;
-
+static char *shell = NULL;
 
 
 static struct option options[] = {
   {"listen",       required_argument, NULL, 'l'},
+  {"shell",        required_argument, NULL, 's'},
 
   {"verbose",      no_argument,       NULL, 'v'},
   {"help",         no_argument,       NULL, 'h'},
@@ -44,7 +45,8 @@ static struct option options[] = {
 void show_usage(char const *name) {
   printf("Usage: %s [options] [--] [command]\n", name);
   printf("\n"
-	 "  -l, --listen=PATH          path to unix domain socket\n"
+	 "  -l, --listen=PATH          PATH to unix domain socket\n"
+	 "  -s, --shell=SHELL          path to shell\n"
 	 "\n"
 	 "  -v, --verbose              verbose\n"
 	 "  -h, --help                 print help message and exit\n"
@@ -62,16 +64,21 @@ void sigint_handler(int signum);
 int main(int argc, char *const argv[]) {
   int opt, index;
 
-  while((opt = getopt_long(argc, argv, "+l:hv", options, &index)) != -1) {
+  while((opt = getopt_long(argc, argv, "+l:s:hv", options, &index)) != -1) {
     switch(opt) {
     case '?':
       goto err;
 
     case 'h':
       show_usage(argv[0]);
+      break;
 
     case 'l':
       socket_path = optarg;
+      break;
+
+    case 's':
+      shell = optarg;
       break;
 
     case 'v':
@@ -88,6 +95,13 @@ int main(int argc, char *const argv[]) {
     goto err;
   }
 
+  if (!shell) {
+    shell = getenv("SHELL");
+  }
+
+  if (!shell) {
+    shell = "/bin/bash";
+  }
 
   int listen_fd = -1;
 
@@ -238,6 +252,6 @@ void handle_connection(int fd) {
     close(new_fds[i]);
   }
 
-  char *const argv[] = {"/bin/bash", NULL};
-  PERROR(==-1, execvp, "/bin/bash", argv);
+  char *const argv[] = {shell, NULL};
+  PERROR(==-1, execvp, shell, argv);
 }

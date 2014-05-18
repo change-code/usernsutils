@@ -260,7 +260,7 @@ void post_unshare() {
 
 int do_exec(char **argv) {
   post_unshare();
-  VERBOSE("start execing '%s'\n", argv[0]);
+  VERBOSE("starting exec '%s'\n", argv[0]);
   PERROR(==-1, execvp, argv[0], argv);
   return EXIT_FAILURE;
 }
