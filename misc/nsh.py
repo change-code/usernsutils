@@ -20,7 +20,7 @@ def main(path):
     s.connect(path)
 
     master, slave = os.openpty()
-    fds = [slave, slave, slave]
+    fds = [slave]
     s.sendmsg(
         [b'\x00'],
         [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", fds))])

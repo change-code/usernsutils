@@ -166,7 +166,7 @@ void sigint_handler(int signum) {
 
 
 void handle_connection(int fd) {
-  char control[CMSG_SPACE(sizeof(int)*3)];
+  char control[CMSG_SPACE(sizeof(int))];
   char n = 0;
 
   struct iovec iov = {.iov_base = &n, .iov_len = 1};
@@ -176,15 +176,11 @@ void handle_connection(int fd) {
     .msg_iov = &iov,
     .msg_iovlen = 1,
     .msg_control = control,
-    .msg_controllen = CMSG_LEN(sizeof(int)*3),
+    .msg_controllen = CMSG_LEN(sizeof(int)),
     .msg_flags = 0,
   };
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-
-  int i;
-  for(i=0; i<3; i++) {
-    ((int *)CMSG_DATA(cmsg))[i] = -1;
-  }
+  *((int *)CMSG_DATA(cmsg)) = -1;
 
   PERROR(==-1, recvmsg, fd, &msg, 0);
 
@@ -197,12 +193,7 @@ void handle_connection(int fd) {
     exit(EXIT_FAILURE);
   }
 
-  int new_fds[3];
-
-  for (i=0; i<3; i++) {
-    new_fds[i] = ((int *)CMSG_DATA(cmsg))[i];
-  }
-
+  int slave = *((int *)CMSG_DATA(cmsg));
   close(fd);
 
   int ttyfd = open("/dev/tty", O_RDWR | O_NOCTTY);
@@ -212,15 +203,13 @@ void handle_connection(int fd) {
   }
 
   PERROR(==-1, setsid);
-  PERROR(==-1, ioctl, new_fds[0], TIOCSCTTY);
+  PERROR(==-1, ioctl, slave, TIOCSCTTY);
 
   pid_t pid;
   PERROR(==-1, pid = fork);
 
   if (pid > 0) {
-    for(i=0; i<3; i++) {
-      close(new_fds[i]);
-    }
+    close(slave);
 
     for(;;) {
       int status = -1;
@@ -246,11 +235,12 @@ void handle_connection(int fd) {
 
   int close_fds[3] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 
+  int i;
   for(i=0; i<3; i++) {
     close(close_fds[i]);
-    dup2(new_fds[i], close_fds[i]);
-    close(new_fds[i]);
+    dup2(slave, close_fds[i]);
   }
+  close(slave);
 
   char *const argv[] = {shell, NULL};
   PERROR(==-1, execvp, shell, argv);

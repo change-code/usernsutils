@@ -16,11 +16,11 @@ STDERR_FILENO = 2
 
 def handle_connection(conn):
     fds = array.array("i")
-    _, ancdata, _, _ = conn.recvmsg(1, socket.CMSG_LEN(3 * fds.itemsize))
+    _, ancdata, _, _ = conn.recvmsg(1, socket.CMSG_LEN(fds.itemsize))
     fds.fromstring(ancdata[0][2])
     conn.close()
 
-    stdin, stdout, stderr = fds
+    slave = fds[0]
 
     try:
         fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
@@ -35,22 +35,18 @@ def handle_connection(conn):
 
     os.setsid()
 
-    fcntl.ioctl(stdin, termios.TIOCSCTTY, '')
+    fcntl.ioctl(slave, termios.TIOCSCTTY, '')
 
     pid = os.fork()
 
     if pid == 0:
-        os.dup2(stdin, STDIN_FILENO)
-        os.dup2(stdout, STDOUT_FILENO)
-        os.dup2(stderr, STDERR_FILENO)
-        os.close(stdin)
-        os.close(stdout)
-        os.close(stderr)
+        os.dup2(slave, STDIN_FILENO)
+        os.dup2(slave, STDOUT_FILENO)
+        os.dup2(slave, STDERR_FILENO)
+        os.close(slave)
         os.execv("/bin/bash", ["/bin/bash"])
     else:
-        os.close(stdin)
-        os.close(stdout)
-        os.close(stderr)
+        os.close(slave)
 
         while True:
             _, status = os.waitpid(pid, 0)

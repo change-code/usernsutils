@@ -108,8 +108,8 @@ int main(int argc, char *const argv[]) {
   int master, slave;
   PERROR(==-1, openpty, &master, &slave, NULL, NULL, NULL);
 
-  size_t controllen = sizeof(int)*3;
-  char control[CMSG_SPACE(sizeof(int)*3)];
+  size_t controllen = sizeof(int);
+  char control[CMSG_SPACE(sizeof(int))];
   char n = 0;
 
   struct iovec iov = {.iov_base = &n, .iov_len = 1};
@@ -128,7 +128,7 @@ int main(int argc, char *const argv[]) {
   cmsg->cmsg_type = SCM_RIGHTS;
   cmsg->cmsg_len = msg.msg_controllen;
 
-  int fds[3] = {slave, slave, slave};
+  int fds[1] = {slave};
   memcpy((int *) CMSG_DATA(cmsg), fds, controllen);
   PERROR(==-1, sendmsg, fd, &msg, 0);
   close(slave);
