@@ -100,7 +100,7 @@ int main(int argc, char *const argv[]) {
   }
 
   if (!shell) {
-    shell = "/bin/bash";
+    shell = "/bin/sh";
   }
 
   int listen_fd = -1;

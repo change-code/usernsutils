@@ -115,11 +115,6 @@ int main(int argc, char *const argv[]) {
     }
   }
 
-  if (optind >= argc) {
-    fprintf(stderr, "%s: command expected\n", argv[0]);
-    goto err;
-  }
-
   if (netns) {
     char netns_fd_path[PATH_MAX] = {0};
     snprintf(netns_fd_path, PATH_MAX, "/var/run/netns/%s", netns);
@@ -134,11 +129,21 @@ int main(int argc, char *const argv[]) {
     unshare_user();
   }
 
-  pid_t pid = spawn_process(argv+optind);
+  pid_t pid;
+
+  if (optind >= argc) {
+    char *shell = getenv("SHELL");
+    if (!shell) {
+      shell = "/bin/sh";
+    }
+    char *const shell_argv[] = {shell, NULL};
+    pid = spawn_process(shell_argv);
+  } else {
+    pid = spawn_process(argv+optind);
+  }
 
   close(STDIN_FILENO);
   close(STDOUT_FILENO);
-
 
   for(;;) {
     int status;
