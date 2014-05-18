@@ -19,3 +19,14 @@ PING 10.0.0.1 (10.0.0.1) 56(84) bytes of data.
 64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=0.097 ms
 64 bytes from 10.0.0.1: icmp_seq=2 ttl=64 time=0.085 ms
 64 bytes from 10.0.0.1: icmp_seq=3 ttl=64 time=0.083 ms
+
+
+
+start nshd inside namespace
+
+[root@host0 usernsutils]# ./bin/nshd -l nshd.sock
+
+connect to nshd from outside the namespace
+
+[noname@localhost usernsutils]$ ./bin/nsh -c nshd.sock 
+[root@host0 usernsutils]#
