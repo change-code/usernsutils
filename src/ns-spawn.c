@@ -51,7 +51,8 @@ static struct option options[] = {
   {"post-unshare", required_argument, NULL, 's'},
   {"verbose",      no_argument,       NULL, 'v'},
   {"help",         no_argument,       NULL, 'h'},
-  {NULL, no_argument, NULL, 0}
+
+  {NULL,           no_argument,       NULL, 0}
 };
 
 

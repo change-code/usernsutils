@@ -43,12 +43,13 @@ static struct option options[] = {
 
   {"verbose",      no_argument,       NULL, 'v'},
   {"help",         no_argument,       NULL, 'h'},
-  {NULL, no_argument, NULL, 0}
+
+  {NULL,           no_argument,       NULL, 0}
 };
 
 
 void show_usage(char const *name) {
-  printf("Usage: %s [options] [--] [command]\n", name);
+  printf("Usage: %s [options]\n", name);
   printf("\n"
 	 "  -c, --connect=PATH         path to unix domain socket\n"
 	 "\n"
