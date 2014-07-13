@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <fcntl.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -122,6 +121,7 @@ int main(int argc, char *const argv[]) {
   signal(SIGCHLD, SIG_IGN);
 
   PERROR(==-1, listen, listen_fd, SOMAXCONN);
+  VERBOSE("start listening on '%s'\n", socket_path);
 
   for(;;) {
     int fd = -1;
@@ -208,6 +208,7 @@ void handle_connection(int fd) {
 
   pid_t pid;
   PERROR(==-1, pid = fork);
+  VERBOSE("SPAWN pid=%d\n", pid);
 
   if (pid > 0) {
     close(slave);
@@ -228,7 +229,7 @@ void handle_connection(int fd) {
         code = WEXITSTATUS(status);
       }
 
-      printf("EXIT pid=%d status=%d\n", child_pid, code);
+      VERBOSE("EXIT pid=%d status=%d\n", child_pid, code);
       break;
     }
     return;
