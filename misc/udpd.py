@@ -94,6 +94,7 @@ def main(path):
         for fd, event in poll.poll():
             if fd == listener.fileno():
                 data, addr, dest = recv(listener)
+                print(addr, dest)
 
                 entry = find_entry_by_addr(addr)
                 if entry is None:
