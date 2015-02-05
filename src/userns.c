@@ -67,7 +67,7 @@ int main(int argc, char *const argv[]) {
 
   int (*cmd)(int argc, char *const argv[]) = NULL;
 
-  for(int i=0; i<(sizeof(commands)/sizeof(struct command)); i++) {
+  for(size_t i=0; i<(sizeof(commands)/sizeof(struct command)); i++) {
     if (strcmp(commands[i].cmd_name, argv[optind])) {
       continue;
     }

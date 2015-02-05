@@ -58,7 +58,7 @@ static int do_connect(int fd) {
   makeraw(&mode);
   PERROR(==-1, tcsetattr, STDIN_FILENO, TCSAFLUSH, &mode);
 
-  void sigwinch_handler(int signum) {
+  void sigwinch_handler(int signum __attribute__((unused))) {
     setwinsz();
   }
 

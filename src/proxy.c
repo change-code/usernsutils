@@ -17,7 +17,7 @@ static void show_usage() {
 }
 
 
-static void epoll_register(int poll_fd, int fd, uint32_t events) {
+static void epoll_set(int poll_fd, int op, int fd, uint32_t events) {
   struct epoll_event event = {
     .events = events,
     .data = {
@@ -25,18 +25,108 @@ static void epoll_register(int poll_fd, int fd, uint32_t events) {
     }
   };
 
-  PERROR(==-1, epoll_ctl, poll_fd, EPOLL_CTL_ADD, fd, &event);
+  PERROR(==-1, epoll_ctl, poll_fd, op, fd, &event);
 }
 
 
-static int handle_connection(int fd, int out_fd) {
+static void set_nonblocking(int fd) {
+  int flag = fcntl(fd, F_GETFL);
+  fcntl(fd, F_SETFL, flag | O_NONBLOCK);
+}
+
+
+static int handle_connection(int in_fd, int out_fd) {
   struct sockaddr_in dst;
   socklen_t optlen = sizeof(dst);
-  PERROR(==-1, getsockopt, fd, SOL_IP, SO_ORIGINAL_DST, &dst, &optlen);
+  PERROR(==-1, getsockopt, in_fd, SOL_IP, SO_ORIGINAL_DST, &dst, &optlen);
   PERROR(==-1, connect, out_fd, &dst, sizeof(dst));
 
   int poll_fd;
   PERROR(==-1, poll_fd = epoll_create, 1);
+
+  set_nonblocking(in_fd);
+  set_nonblocking(out_fd);
+
+  uint32_t in_fd_events = EPOLLIN;
+  uint32_t out_fd_events = EPOLLIN;
+
+  epoll_set(poll_fd, EPOLL_CTL_ADD, in_fd, in_fd_events);
+  epoll_set(poll_fd, EPOLL_CTL_ADD, out_fd, out_fd_events);
+
+  /* read from out_fd, write to in_fd */
+  char in_buffer[4096] = {0};
+  ssize_t in_start = 0;
+  ssize_t in_end = 0;
+
+  /* read from in_fd, write to out_fd */
+  char out_buffer[4096] = {0};
+  ssize_t out_start = 0;
+  ssize_t out_end = 0;
+
+  struct epoll_event event = {0};
+
+  for(;;) {
+    int nfds;
+    PERROR(==-1, nfds = epoll_wait, poll_fd, &event, 1, -1);
+    if (!nfds) {
+      continue;
+    }
+
+    fprintf(stderr, "%d: %08x\n", event.data.fd, event.events);
+
+    if (event.events & EPOLLIN) {
+      if (event.data.fd == in_fd) {
+        ssize_t received;
+        PERROR(==-1, received = recv, in_fd, out_buffer+out_end, sizeof(out_buffer)-out_end, 0);
+        out_end += received;
+        in_fd_events &= ~EPOLLIN;
+        if (received) {
+          out_fd_events |= EPOLLOUT;
+        }
+      } else if (event.data.fd == out_fd) {
+        ssize_t received;
+        PERROR(==-1, received = recv, out_fd, in_buffer+in_end, sizeof(in_buffer)-in_end, 0);
+        in_end += received;
+        out_fd_events &= ~EPOLLIN;
+        if (received) {
+          in_fd_events |= EPOLLOUT;
+        }
+      }
+    } else if (event.events & EPOLLOUT) {
+      if (event.data.fd == in_fd) {
+        ssize_t sent;
+        PERROR(==-1, sent = send, in_fd, in_buffer+in_start, in_end-in_start, 0);
+        in_start += sent;
+
+        if (in_start == in_end) {
+          in_start = 0;
+          in_end = 0;
+          in_fd_events &= ~EPOLLOUT;
+          out_fd_events |= EPOLLIN;
+        }
+
+      } else if (event.data.fd == out_fd) {
+        ssize_t sent;
+        PERROR(==-1, sent = send, out_fd, out_buffer+out_start, out_end-out_start, 0);
+        out_start += sent;
+
+        if (out_start == out_end) {
+          out_start = 0;
+          out_end = 0;
+          out_fd_events &= ~EPOLLOUT;
+          in_fd_events |= EPOLLIN;
+        }
+      }
+    }
+
+    epoll_set(poll_fd, EPOLL_CTL_MOD, in_fd, in_fd_events);
+    epoll_set(poll_fd, EPOLL_CTL_MOD, out_fd, out_fd_events);
+
+    if ((!in_fd_events) && (!out_fd_events)) {
+      break;
+    }
+
+  }
 
   return 0;
 }
@@ -188,7 +278,7 @@ static int udp_proxy(int port, int socketd_fd) {
 
   struct udp_entry *find_least_recent_accessed_entry() {
     int min_index = 0;
-    int min_access = table[0].last_access;
+    unsigned long long min_access = table[0].last_access;
 
     for(int i=1; i<TABLE_SIZE; i++) {
       if (table[i].last_access == 0) {
@@ -207,7 +297,7 @@ static int udp_proxy(int port, int socketd_fd) {
   int poll_fd;
   PERROR(==-1, poll_fd = epoll_create, 1);
 
-  epoll_register(poll_fd, listen_fd, EPOLLIN);
+  epoll_set(poll_fd, EPOLL_CTL_ADD, listen_fd, EPOLLIN);
 
   struct epoll_event event = {0};
 
@@ -257,7 +347,7 @@ static int udp_proxy(int port, int socketd_fd) {
         }
 
         entry->out_fd = get_new_out_fd();
-        epoll_register(poll_fd, entry->out_fd, EPOLLIN);
+        epoll_set(poll_fd, EPOLL_CTL_ADD, entry->out_fd, EPOLLIN);
         entry->addr.sin_family = src.sin_family;
         entry->addr.sin_port = src.sin_port;
         entry->addr.sin_addr.s_addr = src.sin_addr.s_addr;
@@ -332,7 +422,7 @@ int cmd_proxy(int argc, char *const argv[]) {
   ERROR(errno || (endptr == port_str), "bad port number '%s'\n", port_str);
 
   int (*proxy)(int port, int fd) = NULL;
-  for(int i=0; i<(sizeof(protos)/sizeof(struct proto)); i++) {
+  for(size_t i=0; i<(sizeof(protos)/sizeof(struct proto)); i++) {
     if (strcmp(protos[i].proto_name, argv[optind])) {
       continue;
     }

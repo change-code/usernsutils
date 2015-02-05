@@ -61,7 +61,7 @@ static int handle_connection(int fd, char *const argv[]) {
 
   int close_fds[3] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 
-  for(int i=0; i<(sizeof(close_fds)/sizeof(int)); i++) {
+  for(size_t i=0; i<(sizeof(close_fds)/sizeof(int)); i++) {
     close(close_fds[i]);
     dup2(slave, close_fds[i]);
   }

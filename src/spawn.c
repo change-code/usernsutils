@@ -47,6 +47,18 @@ static void write_map(pid_t pid, char *uid_or_gid, char *mapping) {
 }
 
 
+static void deny_setgroups(pid_t pid) {
+  char path[PATH_MAX] = {0};
+  snprintf(path, PATH_MAX, "/proc/%ld/setgroups", (long)pid);
+  char deny[] = "deny";
+  int fd = -1;
+  PERROR(==-1, fd = open, path, O_RDWR);
+  int len = strlen(deny);
+  PERROR(!=len, write, fd, deny, len);
+  close(fd);
+}
+
+
 static void unshare_user() {
   char mapping[25] = {0};
 
@@ -58,6 +70,7 @@ static void unshare_user() {
   pid_t pid = getpid();
 
   VERBOSE("setting uid/gid map\n");
+  deny_setgroups(pid);
 
   snprintf(mapping, sizeof(mapping), "0 %ld 1", (long)uid);
   write_map(pid, "uid", mapping);
@@ -186,7 +199,7 @@ int cmd_spawn(int argc, char *const argv[]) {
 
   char const* dirs[] = {"userns", opt_name};
 
-  for(int i=0; i<sizeof(dirs)/sizeof(char const*); i++) {
+  for(size_t i=0; i<sizeof(dirs)/sizeof(char const*); i++) {
     PERROR(==-1 && (errno != EEXIST), mkdirat, dirfd, dirs[i], 0700);
     int subdirfd = -1;
     PERROR(==-1, subdirfd = openat, dirfd, dirs[i], O_PATH|O_DIRECTORY|O_NOFOLLOW);
