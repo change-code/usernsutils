@@ -28,5 +28,5 @@ start nshd inside namespace
 
 connect to nshd from outside the namespace
 
-[noname@localhost usernsutils]$ ./bin/userns connect -n host0
+[noname@localhost usernsutils]$ ./bin/userns connect host0
 [root@host0 usernsutils]#
