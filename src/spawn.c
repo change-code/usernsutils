@@ -6,6 +6,7 @@
 
 
 static char* opt_name = NULL;
+static char* opt_domain = NULL;
 static int opt_userns = 0;
 static int opt_netns = 0;
 static char *opt_netns_name = NULL;
@@ -15,6 +16,7 @@ static FILE *pid_file = NULL;
 
 static struct option options[] = {
   {"name",         required_argument, NULL, 'n'},
+  {"domain",       optional_argument, NULL, 'd'},
   {"user",         no_argument,       NULL, OPT_USERNS},
   {"net",          optional_argument, NULL, OPT_NETNS},
   {"help",         no_argument,       NULL, 'h'},
@@ -27,6 +29,7 @@ static void show_usage() {
   printf("Usage: %s %s [options] [--] [command]\n", executable, cmd_name);
   printf("\n"
          "  -n, --name=NAME            name of the namespace\n"
+         "  -d, --domain=DOMAIN        domain of the namespace\n"
          "      --user                 new USER namespace\n"
          "      --net[=NETNS]          new NET namespace, or use NETNS\n"
          "\n"
@@ -91,6 +94,10 @@ static int ns_main(void *arg) {
   setenv("USERNS_NAME", opt_name, 1);
   VERBOSE("setting new hostname\n");
   PERROR(==-1, sethostname, opt_name, strlen(opt_name));
+
+  setenv("USERNS_DOMAIN", opt_domain, 1);
+  VERBOSE("setting new domainname\n");
+  PERROR(==-1, setdomainname, opt_domain, strlen(opt_domain));
 
   pid_t pid = -1;
   PERROR(==-1, pid = fork);
@@ -175,6 +182,10 @@ int cmd_spawn(int argc, char *const argv[]) {
       opt_name = optarg;
       break;
 
+    case 'd':
+      opt_domain = optarg;
+      break;
+
     case OPT_USERNS:
       opt_userns = 1;
       break;
@@ -190,6 +201,9 @@ int cmd_spawn(int argc, char *const argv[]) {
   }
 
   BADOPT(!opt_name, "missing name\n");
+
+  opt_domain = (opt_domain)?opt_domain:getenv("USERNS_DOMAIN");
+  opt_domain = (opt_domain)?opt_domain:"localdomain";
 
   char *rundir = getenv("XDG_RUNTIME_DIR");
   ERROR(!rundir, "environment XDG_RUNTIME_DIR is not set\n");
