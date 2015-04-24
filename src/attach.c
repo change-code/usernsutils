@@ -8,10 +8,12 @@ static int flags = 0;
 static struct option options[] = {
   {"name",         required_argument, NULL, 'n'},
 
+  {"user",         no_argument,       NULL, CLONE_NEWUSER},
   {"uts",          no_argument,       NULL, CLONE_NEWUTS},
   {"ipc",          no_argument,       NULL, CLONE_NEWIPC},
-  {"user",         no_argument,       NULL, CLONE_NEWUSER},
+  {"pid",          no_argument,       NULL, CLONE_NEWPID},
   {"net",          no_argument,       NULL, CLONE_NEWNET},
+  {"mount",        no_argument,       NULL, CLONE_NEWNS},
 
   {"verbose",      no_argument,       NULL, 'v'},
   {"help",         no_argument,       NULL, 'h'},
@@ -24,10 +26,12 @@ static void show_usage() {
   printf("\n"
          "  -n, --name=NAME            name of the namespace\n"
          "\n"
+         "      --user                 attach USER namespace\n"
 	 "      --uts                  attach UTS namespace\n"
 	 "      --ipc                  attach IPC namespace\n"
-         "      --user                 attach USER namespace\n"
+         "      --pid                  attach PID namespace\n"
          "      --net                  attach NET namespace\n"
+         "      --mount                attach MOUNT namespace\n"
          "\n"
          "  -h, --help                 print help message and exit\n"
          );
@@ -38,20 +42,20 @@ static void show_usage() {
 static int attach(char const *pid_str, char *const argv[]) {
   static const int mask[] = {
     CLONE_NEWUSER,
-    CLONE_NEWNS,
     CLONE_NEWUTS,
     CLONE_NEWIPC,
     CLONE_NEWPID,
-    CLONE_NEWNET
+    CLONE_NEWNET,
+    CLONE_NEWNS
   };
 
   static char const* filename[] = {
       "/proc/%s/ns/user",
-      "/proc/%s/ns/mnt",
       "/proc/%s/ns/uts",
       "/proc/%s/ns/ipc",
       "/proc/%s/ns/pid",
       "/proc/%s/ns/net",
+      "/proc/%s/ns/mnt",
   };
 
   for(int i=0;i<6;i++) {
@@ -68,8 +72,38 @@ static int attach(char const *pid_str, char *const argv[]) {
     close(fd);
   }
 
-  PERROR(==-1, execvp, argv[0], argv);
-  return EXIT_FAILURE;
+  if (!(flags & mask[3])) {
+    PERROR(==-1, execvp, argv[0], argv);
+    return EXIT_FAILURE;
+  } else {
+    pid_t pid = -1;
+    PERROR(==-1, pid = fork);
+
+    if (pid == 0) {
+      PERROR(==-1, execvp, argv[0], argv);
+      return EXIT_FAILURE;
+    }
+
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+
+    for(;;) {
+      int status;
+      PERROR(==-1, waitpid, pid, &status, 0);
+
+      if (WIFSTOPPED(status)) {
+        continue;
+      }
+
+      if (WIFSIGNALED(status)) {
+        return WTERMSIG(status) + 128;
+      } else {
+        return WEXITSTATUS(status);
+      }
+    }
+
+    return EXIT_FAILURE;
+  }
 }
 
 
@@ -114,9 +148,9 @@ int cmd_attach(int argc, char *const argv[]) {
   fseek(pid_file, 0, SEEK_END);
   size_t size = ftell(pid_file);
   rewind(pid_file);
-  char *pid_str = malloc(size+1);
-
+  char *pid_str = alloca(size+1);
   PERROR(==size, fread, pid_str, size, 1, pid_file);
+  pid_str[size] = 0;
 
   errno = 0;
   char *endptr = NULL;
