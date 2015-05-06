@@ -3,14 +3,14 @@ Quick Start
 [noname@localhost ~]$ git clone git://github.com/bhuztez/usernsutils.git
 [noname@localhost usernsutils]$ cd usernsutils
 [noname@localhost usernsutils]$ make
-[noname@localhost usernsutils]$ ./bin/userns spawn -n host0 --net --user ./recipes/init-ns.sh bash
+[noname@localhost usernsutils]$ ./bin/userns spawn -n host0 --net --user ./share/init-ns.sh bash
 [root@host0 usernsutils]# ip netns add ns1
 [root@host0 usernsutils]# ip link add veth0 type veth peer name veth1
 [root@host0 usernsutils]# ip link set veth1 netns ns1
 [root@host0 usernsutils]# ip address add 10.0.0.1 dev veth0
 [root@host0 usernsutils]# ip link set veth0 up
 [root@host0 usernsutils]# ip route add default dev veth0
-[root@host0 usernsutils]# ./bin/userns spawn -n host1 --net=ns1 ./recipes/init-ns.sh bash
+[root@host0 usernsutils]# ./bin/userns spawn -n host1 --net=ns1 ./share/init-ns.sh bash
 [root@host1 usernsutils]# ip address add 10.0.0.2 dev veth1
 [root@host1 usernsutils]# ip link set veth1 up
 [root@host1 usernsutils]# ip route add default dev veth1
