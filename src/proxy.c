@@ -343,6 +343,7 @@ static int udp_proxy(int port, int socketd_fd) {
           close(entry->out_fd);
         } else {
           entry = find_first_empty_entry();
+          entry_count += 1;
           ERROR(entry==NULL, "cannot find empty entry");
         }
 
