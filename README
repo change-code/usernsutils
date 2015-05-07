@@ -1,6 +1,6 @@
 Quick Start
 
-[noname@localhost ~]$ git clone git://github.com/bhuztez/usernsutils.git
+[noname@localhost ~]$ git clone git://github.com/change-code/usernsutils.git
 [noname@localhost usernsutils]$ cd usernsutils
 [noname@localhost usernsutils]$ make
 [noname@localhost usernsutils]$ ./bin/userns spawn -n host0 --net --user ./share/init-ns.sh bash
