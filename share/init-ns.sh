@@ -73,6 +73,7 @@ bind_file /etc/hosts        <<EOF
 EOF
 
 mount -t proc proc /proc
+mount -t sysfs sysfs /sys
 mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /tmp
 mount -t mqueue mqueue /dev/mqueue
